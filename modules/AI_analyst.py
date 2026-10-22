@@ -24,6 +24,9 @@ class AIAnalyst:
         self.base_url = os.getenv('AX_MODEL_BASE_URL', '').rstrip('/')
         self.model = os.getenv('AX_MODEL_NAME') or 'llama3-70b-8192'
         self.ai_enabled = bool(self.groq_api_key or self.base_url)
+        # Only Groq's Llama gets a sampling temperature; newer models (e.g.
+        # Claude Sonnet 5.5) reject the parameter.
+        self.temperature = None if self.base_url else 0.7
         if not self.base_url:
             self.base_url = 'https://api.groq.com/openai/v1'
         self.logger = logging.getLogger(__name__)
@@ -172,15 +175,16 @@ class AIAnalyst:
                     "role": "user",
                     "content": prompt
                 }],
-                "temperature": 0.7,
                 "max_tokens": 1500
             }
+            if self.temperature is not None:
+                payload["temperature"] = self.temperature
             
             # Retry logic for API calls
             max_retries = 3
             for attempt in range(max_retries):
                 try:
-                    self.logger.info(f"Making Groq API call for {perspective} perspective (attempt {attempt + 1})")
+                    self.logger.info(f"Calling {self.model} for {perspective} perspective (attempt {attempt + 1})")
                     
                     response = requests.post(
                         f"{self.base_url}/chat/completions",
