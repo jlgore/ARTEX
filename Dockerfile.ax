@@ -14,9 +14,12 @@ FROM ghcr.io/voidmoon-io/ax/ax-task-runner@sha256:0acdbf9316d9ca753125b5a5ddbc15
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    NMAP_UNPRIVILEGED=1
 
-# nmap is used for TCP connect scans (-sT), which need no raw sockets.
+# nmap is used for TCP connect scans (-sT), which need no raw sockets. The
+# sandbox runs as root under gVisor, so nmap would otherwise try privileged
+# mode and quit on interface enumeration ("Address family not supported").
 RUN apt-get update \
     && apt-get install -y --no-install-recommends nmap \
     && rm -rf /var/lib/apt/lists/*
