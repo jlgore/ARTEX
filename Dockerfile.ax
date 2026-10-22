@@ -1,0 +1,35 @@
+# ARTEX as an AX task image: the AX task runner plus nmap and the `artex-scan`
+# CLI (cli.py). Keeps the runner's entrypoint, as AX requires
+# (google/ax docs/runner.md), so the sandbox, workspace setup and goal agent
+# work as usual.
+#
+# ARTEX lives in its own virtualenv so its pinned dependencies cannot clash
+# with the Antigravity agent installed in the base image's system Python.
+#
+# Bump the base digest from talos-gitops infrastructure/base/ax/task-runner-image.txt.
+#
+# Build: docker build -f Dockerfile.ax -t artex-task-runner .
+
+FROM ghcr.io/voidmoon-io/ax/ax-task-runner@sha256:0acdbf9316d9ca753125b5a5ddbc15fdc69c91bbfbacb147ded098b9e6d4fb6c
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# nmap is used for TCP connect scans (-sT), which need no raw sockets.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nmap \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /opt/artex/
+RUN python -m venv /opt/artex/venv \
+    && /opt/artex/venv/bin/pip install -r /opt/artex/requirements.txt
+
+COPY app.py cli.py /opt/artex/
+COPY core/ /opt/artex/core/
+COPY modules/ /opt/artex/modules/
+COPY utils/ /opt/artex/utils/
+COPY templates/ /opt/artex/templates/
+
+RUN printf '#!/bin/sh\nexec /opt/artex/venv/bin/python /opt/artex/cli.py "$@"\n' > /usr/local/bin/artex-scan \
+    && chmod 0755 /usr/local/bin/artex-scan

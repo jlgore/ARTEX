@@ -5,16 +5,27 @@ from typing import Dict, List, Optional
 import logging
 from datetime import datetime
 import time
+import os
 
 class AIAnalyst:
     def __init__(self, groq_api_key: str = None):
         """
-        Initialize the AI analyst with Groq API integration
+        Initialize the AI analyst with an OpenAI-compatible chat completions API
+        (Groq by default)
         
         Args:
-            groq_api_key: Optional Groq API key (if not provided, will use rule-based analysis only)
+            groq_api_key: Optional API key. Falls back to AX_MODEL_API_KEY.
+
+        AX_MODEL_BASE_URL and AX_MODEL_NAME select another endpoint and model,
+        e.g. an in-cluster proxy that adds the key itself. Without a key or a
+        base URL, only rule-based analysis is used.
         """
-        self.groq_api_key = "" #Add your groq_api_key here
+        self.groq_api_key = groq_api_key or os.getenv('AX_MODEL_API_KEY', '')
+        self.base_url = os.getenv('AX_MODEL_BASE_URL', '').rstrip('/')
+        self.model = os.getenv('AX_MODEL_NAME') or 'llama3-70b-8192'
+        self.ai_enabled = bool(self.groq_api_key or self.base_url)
+        if not self.base_url:
+            self.base_url = 'https://api.groq.com/openai/v1'
         self.logger = logging.getLogger(__name__)
         
         # Set up logging
@@ -102,8 +113,8 @@ class AIAnalyst:
         try:
             self.logger.info("Starting AI analysis...")
             
-            if self.groq_api_key:
-                self.logger.info("Using Groq API for analysis")
+            if self.ai_enabled:
+                self.logger.info(f"Using {self.model} at {self.base_url} for analysis")
                 
                 # Analyze owner perspective
                 self.logger.info("Analyzing owner perspective...")
@@ -151,13 +162,12 @@ class AIAnalyst:
             prompt = self._prepare_prompt(scan_results, perspective)
             
             # Call Groq API with retry logic
-            headers = {
-                "Authorization": f"Bearer {self.groq_api_key}",
-                "Content-Type": "application/json"
-            }
+            headers = {"Content-Type": "application/json"}
+            if self.groq_api_key:
+                headers["Authorization"] = f"Bearer {self.groq_api_key}"
             
             payload = {
-                "model": "llama3-70b-8192",
+                "model": self.model,
                 "messages": [{
                     "role": "user",
                     "content": prompt
@@ -173,7 +183,7 @@ class AIAnalyst:
                     self.logger.info(f"Making Groq API call for {perspective} perspective (attempt {attempt + 1})")
                     
                     response = requests.post(
-                        "https://api.groq.com/openai/v1/chat/completions",
+                        f"{self.base_url}/chat/completions",
                         headers=headers,
                         json=payload,
                         timeout=45
@@ -192,7 +202,7 @@ class AIAnalyst:
                             if content.strip().startswith('{'):
                                 analysis = json.loads(content)
                                 analysis['perspective'] = perspective
-                                analysis['ai_model'] = 'Groq Llama3-70B'
+                                analysis['ai_model'] = self.model
                                 return analysis
                             else:
                                 # Handle non-JSON response
@@ -331,7 +341,7 @@ Return only valid JSON, no additional text."""
                 json_str = text[start:end]
                 parsed = json.loads(json_str)
                 parsed['perspective'] = perspective
-                parsed['ai_model'] = 'Groq Llama3-70B'
+                parsed['ai_model'] = self.model
                 return parsed
         except:
             pass
