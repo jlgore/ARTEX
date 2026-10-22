@@ -118,3 +118,21 @@ Sample Report Output
 Security Notice
 
 This tool is for authorized security assessments only. Unauthorized use against systems you don't own or have permission to test is illegal.
+
+
+## Command line and AX
+
+`cli.py` runs the same scan as the web UI and writes the JSON and PDF reports:
+
+```bash
+python cli.py example.com --out ./reports --intensity light --skip email
+```
+
+The AI analysis talks to any OpenAI-compatible chat completions endpoint. Set
+`AX_MODEL_BASE_URL` and `AX_MODEL_NAME` to choose one, and `AX_MODEL_API_KEY`
+(or `GROQ_API_KEY` for the web UI) if it needs a key. With neither a key nor a
+base URL, ARTEX falls back to rule-based analysis.
+
+`Dockerfile.ax` builds an [AX](https://github.com/google/ax) task image with
+`artex-scan` on the path; `.github/workflows/publish-ax.yaml` publishes it to
+`ghcr.io/<owner>/artex-task-runner`.
